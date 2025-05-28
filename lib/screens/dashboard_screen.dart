@@ -1,10 +1,65 @@
+// lib/screens/dashboard_screen.dart
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:readquest/main.dart';                    // for ReaderLoader
+import 'package:readquest/screens/quiz_screen.dart';
+import 'package:readquest/screens/manage_books_screen.dart';
+import '../models/user.dart';
+import '../models/assigned_book.dart';
+import '../services/book_service.dart';
+import '../services/user_service.dart';                  // fetchUserByName
 import '../theme/app_colors.dart';
+import '../widgets/assigned_book_card.dart';
+import '../widgets/mascot_widget.dart';
+import '../widgets/user_progress_card.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   final String readerName;
+  const DashboardScreen({Key? key, required this.readerName})
+      : super(key: key);
 
-  const DashboardScreen({super.key, required this.readerName});
+  @override
+  _DashboardScreenState createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  late Future<User>               _userFuture;
+  late Future<List<AssignedBook>> _assignedFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _reloadAll();
+  }
+
+  void _reloadAll() {
+    _userFuture     = fetchUserByName(widget.readerName);
+    _assignedFuture = fetchAssignedBooks(widget.readerName);
+  }
+
+  void _goToQuiz(AssignedBook book) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => QuizScreen(
+          readerName: widget.readerName,
+          bookId:     book.bookId,
+          bookTitle:  book.title,
+        ),
+      ),
+    ).then((_) => setState(_reloadAll));
+  }
+
+  Future<void> _switchReader() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('selectedReader');
+    // Pop everything and go back to ReaderLoader
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const ReaderLoader()),
+          (_) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,132 +70,101 @@ class DashboardScreen extends StatelessWidget {
           children: [
             DrawerHeader(
               decoration: BoxDecoration(color: AppColors.skyBlue),
-              child: Text('Hello, $readerName!',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              child: Text(
+                'Hello, ${widget.readerName}!',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
+
             const ListTile(title: Text('Reading')),
             const ListTile(title: Text('Games')),
             const ListTile(title: Text('Videos')),
-            const ListTile(title: Text('Parent View')),
+
+            ListTile(
+              title: const Text('Parent View'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ManageBooksScreen(),
+                  ),
+                );
+              },
+            ),
+
+            const Divider(),
+
+            ListTile(
+              leading: const Icon(Icons.switch_account),
+              title: const Text('Switch Reader'),
+              onTap: () {
+                Navigator.pop(context);
+                _switchReader();
+              },
+            ),
           ],
         ),
       ),
       appBar: AppBar(
-        title: Text('Great job, $readerName! 🎉'),
+        title: Text('Great job, ${widget.readerName}! 🎉'),
         backgroundColor: AppColors.primaryPeach,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ListView(
           children: [
-            // Great Job card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.primaryPeach,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Great job! 🎉",
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "You've learned 4 new words and 3 colors this week.",
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: 12 / 36,
-                      minHeight: 12,
-                      backgroundColor: Colors.white24,
-                      color: AppColors.green,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    "12/36 lessons completed",
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ],
-              ),
+
+            // 1) Fetch user, then show progress AND mascot
+            FutureBuilder<User>(
+              future: _userFuture,
+              builder: (ctx, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snap.hasError) {
+                  return Center(child: Text('Error: ${snap.error}'));
+                }
+                final userData = snap.data!;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    UserProgressCard(user: userData),
+                    const SizedBox(height: 20),
+                    MascotMotivationCard(user: userData),
+                  ],
+                );
+              },
             ),
+
             const SizedBox(height: 20),
 
-            // Mascot & Motivation Row
-            Row(
-              children: [
-                SizedBox(
-                  width: 100,
-                  height: 100,
-                  child: Image.asset(
-                    "lib/assets/images/mascot.png",
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 100),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Text(
-                    "Keep going! You're doing awesome!",
-                    style: TextStyle(fontSize: 18),
-                  ),
-                ),
-              ],
+            // 2) Fetch assigned books
+            FutureBuilder<List<AssignedBook>>(
+              future: _assignedFuture,
+              builder: (ctx, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snap.hasError) {
+                  return Center(child: Text('Error: ${snap.error}'));
+                }
+                final books = snap.data!;
+                if (books.isEmpty) {
+                  return const Center(child: Text("No books assigned yet."));
+                }
+                final latest = books.last;
+                return AssignedBookCard(
+                  bookTitle: latest.title,
+                  onTestPressed: () => _goToQuiz(latest),
+                );
+              },
             ),
-            const SizedBox(height: 20),
 
-            const Text("Topics this week:",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-
-            // Grid of topic cards
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 2.2,
-              children: const [
-                _TopicCard(title: "Human Emotions"),
-                _TopicCard(title: "Story Time"),
-                _TopicCard(title: "Fun with Letters"),
-                _TopicCard(title: "Animal Sounds"),
-              ],
-            ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TopicCard extends StatelessWidget {
-  final String title;
-
-  const _TopicCard({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.cream,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(2, 2)),
-        ],
-      ),
-      child: Center(
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
     );

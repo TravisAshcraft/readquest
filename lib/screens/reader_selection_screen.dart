@@ -1,11 +1,14 @@
+// lib/screens/reader_selection_screen.dart
+
 import 'package:flutter/material.dart';
+import 'package:readquest/screens/manage_books_screen.dart';  // ← import admin page
 
 class ReaderSelectScreen extends StatelessWidget {
-  final void Function(String) onSelected;
+  final Future<void> Function(String) onSelected;
 
-  ReaderSelectScreen({super.key, required this.onSelected});
+  const ReaderSelectScreen({super.key, required this.onSelected});
 
-  final List<String> readers = [
+  final List<String> readers = const [
     'Londyn',
     'Aubri',
     'Heidi',
@@ -20,6 +23,20 @@ class ReaderSelectScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Who's Reading Today?"),
         backgroundColor: const Color(0xFFF3A745),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings),
+            tooltip: 'Parent View',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ManageBooksScreen(),
+                ),
+              );
+            },
+          )
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -29,7 +46,9 @@ class ReaderSelectScreen extends StatelessWidget {
           mainAxisSpacing: 20,
           children: readers.map((name) {
             return GestureDetector(
-              onTap: () => onSelected(name),
+              onTap: () async {
+                await onSelected(name);
+              },
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -43,7 +62,10 @@ class ReaderSelectScreen extends StatelessWidget {
                   children: [
                     const Icon(Icons.account_circle, size: 48, color: Colors.orange),
                     const SizedBox(height: 12),
-                    Text(name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      name,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),
