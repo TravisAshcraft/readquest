@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:readquest/main.dart';                    // for ReaderLoader
+import 'package:readquest/screens/signin_screen.dart';
 import 'package:readquest/screens/quiz_screen.dart';
 import 'package:readquest/screens/manage_books_screen.dart';
 import '../models/user.dart';
@@ -54,9 +54,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _switchReader() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('selectedReader');
-    // Pop everything and go back to ReaderLoader
+    // Pop everything and go back to SignInScreen
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const ReaderLoader()),
+      MaterialPageRoute(builder: (_) => const SignInScreen()),
           (_) => false,
     );
   }
