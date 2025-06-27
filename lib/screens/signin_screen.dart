@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/child.dart';
+import 'parentdashboard_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({Key? key}) : super(key: key);
@@ -18,13 +20,15 @@ class _SignInScreenState extends State<SignInScreen> {
   String? _errorMessage;
 
   Future<void> _signIn() async {
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final response = await http.post(
+      final resp = await http.post(
         Uri.parse('https://readquest.halfbytegames.net/auth/signin'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -33,20 +37,45 @@ class _SignInScreenState extends State<SignInScreen> {
         }),
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final token = data['access_token'];
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', token);
-
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        final data = jsonDecode(response.body);
+      if (resp.statusCode != 200) {
+        final err = jsonDecode(resp.body);
         setState(() {
-          _errorMessage = data['detail'] ?? 'Invalid credentials';
+          _errorMessage = err['detail'] ?? 'Invalid credentials';
         });
+        return;
       }
+
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+
+      final token      = data['access_token'] as String;
+      final parentName = data['parent_name'] as String;
+      final rawKids    = data['children'] as List<dynamic>;
+
+      // save JWT
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('jwt', token);
+
+      // map JSON children → Dart models
+      final kids = rawKids.map((c) {
+        return Child.fromJson({
+          'id':           c['id'],
+          'name':         c['name'],
+          'booksRead':    c['booksRead'],
+          'points':       c['points'],
+          'pairingCode':  c['pairingCode'],
+        });
+      }).toList();
+
+      // push to dashboard
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ParentDashboardScreen(
+            parentName: parentName,
+            children: kids,
+          ),
+        ),
+      );
     } catch (e) {
       setState(() {
         _errorMessage = 'Something went wrong. Please try again.';
@@ -63,8 +92,8 @@ class _SignInScreenState extends State<SignInScreen> {
       appBar: AppBar(
         title: const Text('Sign In'),
         centerTitle: true,
-        elevation: 0,
         backgroundColor: Colors.transparent,
+        elevation: 0,
         foregroundColor: Colors.black87,
       ),
       body: Container(
@@ -110,6 +139,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       style: TextStyle(color: Colors.black54),
                     ),
                     const SizedBox(height: 24),
+
                     if (_errorMessage != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
@@ -119,6 +149,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           textAlign: TextAlign.center,
                         ),
                       ),
+
                     TextFormField(
                       decoration: InputDecoration(
                         labelText: 'Email',
@@ -127,13 +158,13 @@ class _SignInScreenState extends State<SignInScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      onChanged: (value) => _email = value,
-                      validator: (value) =>
-                      value == null || !value.contains('@')
-                          ? 'Enter a valid email'
-                          : null,
+                      onChanged: (v) => _email = v,
+                      validator: (v) => v != null && v.contains('@')
+                          ? null
+                          : 'Enter a valid email',
                     ),
                     const SizedBox(height: 16),
+
                     TextFormField(
                       decoration: InputDecoration(
                         labelText: 'Password',
@@ -143,53 +174,46 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                       obscureText: true,
-                      onChanged: (value) => _password = value,
-                      validator: (value) =>
-                      value == null || value.length < 6
-                          ? 'Min 6 characters'
-                          : null,
+                      onChanged: (v) => _password = v,
+                      validator: (v) => v != null && v.length >= 6
+                          ? null
+                          : 'Min 6 characters',
                     ),
-          const SizedBox(height: 24),
-          _isLoading
-              ? const CircularProgressIndicator()
-              : Column(
-            children: [
-              ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    _signIn();
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFB5FFC),
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 16, horizontal: 48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text(
-                  'Sign In',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/signup');
-                },
-                child: const Text(
-                  "Don't have an account? Sign up",
-                  style: TextStyle(
-                    color: Color(0xFFFB5FFC),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
+                    const SizedBox(height: 24),
+
+                    _isLoading
+                        ? const CircularProgressIndicator()
+                        : ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFB5FFC),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 16, horizontal: 48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: _signIn,
+                      child: const Text(
+                        'Sign In',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/signup');
+                      },
+                      child: const Text(
+                        "Don't have an account? Sign up",
+                        style: TextStyle(
+                          color: Color(0xFFFB5FFC),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

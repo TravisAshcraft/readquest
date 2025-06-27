@@ -27,17 +27,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<User>               _userFuture;
   late Future<List<AssignedBook>> _assignedFuture;
 
-  @override
-  void initState() {
-    super.initState();
-    _reloadAll();
-  }
-
-  void _reloadAll() {
-    _userFuture     = fetchUserByName(widget.readerName);
-    _assignedFuture = fetchAssignedBooks(widget.readerName);
-  }
-
   void _goToQuiz(AssignedBook book) {
     Navigator.push(
       context,
@@ -48,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           bookTitle:  book.title,
         ),
       ),
-    ).then((_) => setState(_reloadAll));
+    );
   }
 
   Future<void> _switchReader() async {

@@ -48,7 +48,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
 
       if (response.statusCode == 201) {
-        Navigator.pushReplacementNamed(context, '/signin');
+        Navigator.pushReplacementNamed(context, '/dashboard_');
       } else {
         final data = jsonDecode(response.body);
         setState(() {
